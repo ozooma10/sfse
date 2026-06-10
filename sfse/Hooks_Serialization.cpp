@@ -18,7 +18,7 @@ RelocAddr <_SaveGame> SaveGame_Original(0x02554FD0);
 
 typedef bool (*_LoadGame)(BGSSaveLoadGame* a_this, const char* a_name, void* a_unk1, void* a_unk2);
 RelocAddr <_LoadGame> LoadGame_Call(0x02585C00 + 0x572);
-RelocAddr <_LoadGame> LoadGame_Original(0x0255B7D0);
+RelocAddr <_LoadGame> LoadGame_Original(0x02559240);
 
 typedef bool (*_DeleteSaveFile)(const char* a_filePath);
 RelocAddr <_DeleteSaveFile> DeleteSaveFile_Call(0x025853DC + 0x65);

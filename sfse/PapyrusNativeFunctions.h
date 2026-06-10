@@ -81,7 +81,7 @@ public:
 		u16	unk0A;		// 0A
 
 		MEMBER_FN_PREFIX(ParameterInfo);
-		DEFINE_MEMBER_FN(GetParam, u64 *, 0x02827440, u32 idx, BSFixedString * nameOut, u64 * typeOut);
+		DEFINE_MEMBER_FN(GetParam, u64 *, 0x02824760, u32 idx, BSFixedString * nameOut, u64 * typeOut);
 	};
 
 	virtual BSFixedString * GetName(void) override { return &m_fnName; }
@@ -134,11 +134,11 @@ public:
 	virtual bool			Run(VMValue * baseValue, VMClassRegistry * registry, u32 arg2, VMValue * resultValue, VMState * state) = 0;
 
 	MEMBER_FN_PREFIX(NativeFunctionBase);
-	DEFINE_MEMBER_FN(Impl_Invoke, u32, 0x02827B10, u64 unk0, u64 unk1, VMClassRegistry * registry, VMState * unk3);
+	DEFINE_MEMBER_FN(Impl_Invoke, u32, 0x02824E30, u64 unk0, u64 unk1, VMClassRegistry * registry, VMState * unk3);
 	// ??_7?$NativeFunction1@VActiveEffect@@XPEAVTESForm@@@BSScript@@6B@ entry 0x10
-	DEFINE_MEMBER_FN(Impl_Fn10, BSFixedString *, 0x028274F0);
-	DEFINE_MEMBER_FN(Impl_GetParamInfo, bool, 0x02827510, u32 idx, void * out);
-	DEFINE_MEMBER_FN(Impl_Fn15, void *, 0x028275D0, u64 arg0, u64 arg1);
+	DEFINE_MEMBER_FN(Impl_Fn10, BSFixedString *, 0x02824810);
+	DEFINE_MEMBER_FN(Impl_GetParamInfo, bool, 0x02824830, u32 idx, void * out);
+	DEFINE_MEMBER_FN(Impl_Fn15, void *, 0x028248F0, u64 arg0, u64 arg1);
 
 protected:
 	BSFixedString	m_fnName;		// 10
@@ -172,8 +172,8 @@ public:
 	virtual bool	HasCallback(void) override { return m_callback != 0; }
 
 	MEMBER_FN_PREFIX(NativeFunction);
-	DEFINE_MEMBER_FN(Impl_ctor, NativeFunction *, 0x028276A0, const char * fnName, const char * className, u8 unk0, u32 numParams);
-	DEFINE_MEMBER_FN(Impl_dtor, void, 0x02827A70);	// same as NativeFunctionBase dtor
+	DEFINE_MEMBER_FN(Impl_ctor, NativeFunction *, 0x028249C0, const char * fnName, const char * className, u8 unk0, u32 numParams);
+	DEFINE_MEMBER_FN(Impl_dtor, void, 0x02824D90);	// same as NativeFunctionBase dtor
 
 protected:
 	void * m_callback;	// 50

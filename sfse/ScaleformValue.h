@@ -62,28 +62,28 @@ public:
 
 		virtual ~ObjectInterface();
 
-        DEFINE_MEMBER_FN_3(HasMember, bool, 0x03356580, void* pData, const char* name, bool isDisplayObj);
-        DEFINE_MEMBER_FN_4(GetMember, bool, 0x033568C0, void* pData, const char* name, Value* pValue, bool isDisplayObj);
-        DEFINE_MEMBER_FN_4(SetMember, bool, 0x03356CB0, void* pData, const char* name, const Value& pValue, bool isDisplayObj);
-        DEFINE_MEMBER_FN_6(Invoke, bool, 0x033570D0, void* pData, Value* result, const char* name, const Value* args, unsigned long long numArgs, bool isDisplayObj);
-        DEFINE_MEMBER_FN_4(CreateEmptyMovieClip, bool, 0x0335A7F0, void* pData, Value* pValue, const char* instanceName, int depth);
-        DEFINE_MEMBER_FN_6(AttachMovie, bool, 0x0335AAB0, void* pData, Value* pValue, const char* symbolName, const char* instanceName, int depth, const void* initArgs);
-        DEFINE_MEMBER_FN_1(GetArraySize, unsigned int, 0x033583B0, void* pData);
-        DEFINE_MEMBER_FN_2(SetArraySize, bool, 0x033583C0, void* pData, unsigned int size);
-        DEFINE_MEMBER_FN_3(GetElement, bool, 0x033583E0, void* pData, unsigned int index, Value* value);
-        DEFINE_MEMBER_FN_3(SetElement, bool, 0x03358470, void* pData, unsigned int index, const Value& value);
-        DEFINE_MEMBER_FN_2(PushBack, bool, 0x033586B0, void* pData, const Value& value);
-        DEFINE_MEMBER_FN_2(PopBack, bool, 0x03358710, void* pData, Value* value);
-        DEFINE_MEMBER_FN_3(RemoveElements, bool, 0x033587C0, void* pData, unsigned idx, int count);
-        DEFINE_MEMBER_FN_4(VisitElements, void, 0x033584D0, void* pData, ArrVisitor* visitor, unsigned long idx, int count);
-        DEFINE_MEMBER_FN_3(VisitMembers, void, 0x03357C70, void* pData, ObjVisitor* visitor, bool isDisplayObj);
+        DEFINE_MEMBER_FN_3(HasMember, bool, 0x03352560, void* pData, const char* name, bool isDisplayObj);
+        DEFINE_MEMBER_FN_4(GetMember, bool, 0x033528A0, void* pData, const char* name, Value* pValue, bool isDisplayObj);
+        DEFINE_MEMBER_FN_4(SetMember, bool, 0x03352C90, void* pData, const char* name, const Value& pValue, bool isDisplayObj);
+        DEFINE_MEMBER_FN_6(Invoke, bool, 0x033530B0, void* pData, Value* result, const char* name, const Value* args, unsigned long long numArgs, bool isDisplayObj);
+        DEFINE_MEMBER_FN_4(CreateEmptyMovieClip, bool, 0x033567D0, void* pData, Value* pValue, const char* instanceName, int depth);
+        DEFINE_MEMBER_FN_6(AttachMovie, bool, 0x03356A90, void* pData, Value* pValue, const char* symbolName, const char* instanceName, int depth, const void* initArgs);
+        DEFINE_MEMBER_FN_1(GetArraySize, unsigned int, 0x03354390, void* pData);
+        DEFINE_MEMBER_FN_2(SetArraySize, bool, 0x033543A0, void* pData, unsigned int size);
+        DEFINE_MEMBER_FN_3(GetElement, bool, 0x033543C0, void* pData, unsigned int index, Value* value);
+        DEFINE_MEMBER_FN_3(SetElement, bool, 0x03354450, void* pData, unsigned int index, const Value& value);
+        DEFINE_MEMBER_FN_2(PushBack, bool, 0x03354690, void* pData, const Value& value);
+        DEFINE_MEMBER_FN_2(PopBack, bool, 0x033546F0, void* pData, Value* value);
+        DEFINE_MEMBER_FN_3(RemoveElements, bool, 0x033547A0, void* pData, unsigned idx, int count);
+        DEFINE_MEMBER_FN_4(VisitElements, void, 0x033544B0, void* pData, ArrVisitor* visitor, unsigned long idx, int count);
+        DEFINE_MEMBER_FN_3(VisitMembers, void, 0x03353C50, void* pData, ObjVisitor* visitor, bool isDisplayObj);
         // DeleteMember TBD
-        DEFINE_MEMBER_FN_3(GetText, bool, 0x0335A480, void* pData, Value* value, bool html);
-        DEFINE_MEMBER_FN_3(SetText, bool, 0x0335A5E0, void* pData, const char* text, bool html);
-        DEFINE_MEMBER_FN_3(SetTextW, bool, 0x0335A700, void* pData, const wchar_t* text, bool html);
-        DEFINE_MEMBER_FN_3(GotoAndPlayL, bool, 0x0335AF60, void* pData, const char* frame, bool stop);
-        DEFINE_MEMBER_FN_3(GotoAndPlay, bool, 0x0335B060, void* pData, unsigned frame, bool stop);
-        DEFINE_MEMBER_FN_2(GetParent, bool, 0x03358CE0, void* pData, Value* value);
+        DEFINE_MEMBER_FN_3(GetText, bool, 0x03356460, void* pData, Value* value, bool html);
+        DEFINE_MEMBER_FN_3(SetText, bool, 0x033565C0, void* pData, const char* text, bool html);
+        DEFINE_MEMBER_FN_3(SetTextW, bool, 0x033566E0, void* pData, const wchar_t* text, bool html);
+        DEFINE_MEMBER_FN_3(GotoAndPlayL, bool, 0x03356F40, void* pData, const char* frame, bool stop);
+        DEFINE_MEMBER_FN_3(GotoAndPlay, bool, 0x03357040, void* pData, unsigned frame, bool stop);
+        DEFINE_MEMBER_FN_2(GetParent, bool, 0x03354CC0, void* pData, Value* value);
         // GetDisplayInfo TBD
         // SetDisplayInfo TBD
         // GetDisplayMatrix TBD
@@ -91,8 +91,8 @@ public:
         // GetColorTransform TBD
         // SetColorTransform TBD
 
-        DEFINE_MEMBER_FN_2(ObjectAddRef, void, 0x03356420, Value* value, void* pData);
-        DEFINE_MEMBER_FN_2(ObjectRelease, void, 0x033564C0, Value* value, void* pData);
+        DEFINE_MEMBER_FN_2(ObjectAddRef, void, 0x03352400, Value* value, void* pData);
+        DEFINE_MEMBER_FN_2(ObjectRelease, void, 0x033524A0, Value* value, void* pData);
 
 		MovieImpl* pMovieRoot;
     };
