@@ -9,6 +9,8 @@
 #include "sfse/PluginManager.h"
 
 #include <ShlObj.h>
+#include <limits>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -16,7 +18,10 @@
 
 namespace Serialization
 {
+#define MACRO_SWAP32(a)			((((a) & 0x000000FF) << 24) | (((a) & 0x0000FF00) << 8) | (((a) & 0x00FF0000) >> 8) | (((a) & 0xFF000000) >> 24))
+
 	const char* kSavegamePath = "\\My Games\\" SAVE_FOLDER_NAME "\\";
+	const u64 kMaxCosaveSize = 256ull * 1024ull * 1024ull;
 
 	struct GlobalDataHeader
 	{
@@ -51,7 +56,8 @@ namespace Serialization
 	std::unordered_set<u32> deletedIDs;
 	std::string s_savePath;
 
-
+	std::mutex s_remapLock;
+	std::mutex s_callbackLock;
 	std::unordered_map<PluginHandle, PluginCallbacks> s_pluginCallbacks;
 
 	struct ChunkOut { u32 type; u32 version; std::vector<u8> data; };
@@ -61,6 +67,61 @@ namespace Serialization
 	std::vector<ChunkIn>*	s_currentReadChunks = nullptr;
 	size_t					s_currentReadIdx = static_cast<size_t>(-1);
 	u32						s_currentReadByte = 0;
+
+	struct CallbackSnapshot
+	{
+		PluginHandle handle;
+		PluginCallbacks callbacks;
+	};
+
+	std::vector<CallbackSnapshot> GetCallbackSnapshot()
+	{
+		std::lock_guard<std::mutex> locker(s_callbackLock);
+
+		std::vector<CallbackSnapshot> result;
+		result.reserve(s_pluginCallbacks.size());
+		for (const auto& iter : s_pluginCallbacks)
+		{
+			result.push_back({ iter.first, iter.second });
+		}
+		return result;
+	}
+
+	bool SafeCallEventCallback(SFSESerializationInterface::EventCallback callback)
+	{
+		__try
+		{
+			callback(&g_SFSESerializationInterface);
+			return true;
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			return false;
+		}
+	}
+
+	bool SafeCallFormDeleteCallback(SFSESerializationInterface::FormDeleteCallback callback, u32 formId)
+	{
+		__try
+		{
+			callback(formId);
+			return true;
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			return false;
+		}
+	}
+
+	bool WriteFileChecked(FileStream& f, const void* data, u64 length)
+	{
+		return f.write(data, length) == length;
+	}
+
+	bool SeekFileChecked(FileStream& f, u64 offset)
+	{
+		return f.seek(offset) == offset;
+	}
 
 	struct IDRemapDeleteListener :
 		public BSTEventSink<TESFormIDRemapEvent>,
@@ -74,25 +135,34 @@ namespace Serialization
 
 		virtual	EventResult	ProcessEvent(const TESFormIDRemapEvent& arEvent, BSTEventSource<TESFormIDRemapEvent>* eventSource)
 		{
+			std::lock_guard<std::mutex> locker(s_remapLock);
 			changedIDs[arEvent.oldID] = arEvent.newID;
 			return EventResult::kContinue;
 		};
 
 		virtual	EventResult	ProcessEvent(const TESFormDeleteEvent& arEvent, BSTEventSource<TESFormDeleteEvent>* eventSource)
 		{
-			deletedIDs.insert(arEvent.formId);
-
-			// notify plugins that registered a form-delete callback
-			for (const auto& iter : s_pluginCallbacks)
 			{
-				if (iter.second.formDelete)
+				std::lock_guard<std::mutex> locker(s_remapLock);
+				deletedIDs.insert(arEvent.formId);
+			}
+
+			std::vector<CallbackSnapshot> callbacks = GetCallbackSnapshot();
+			for (const auto& iter : callbacks)
+			{
+				if (iter.callbacks.formDelete && !SafeCallFormDeleteCallback(iter.callbacks.formDelete, arEvent.formId))
 				{
-					iter.second.formDelete(static_cast<u64>(arEvent.formId));
+					_ERROR("FormDelete callback for plugin %u failed", iter.handle);
 				}
 			}
 			return EventResult::kContinue;
 		};
 	};
+
+	void Initialize()
+	{
+		static IDRemapDeleteListener listener{};
+	}
 
 	void RemoveFileExtension(std::string& path)
 	{
@@ -144,20 +214,22 @@ namespace Serialization
 
 	void HandleBeginLoad()
 	{
-		//if the remap listener isn't already registered, register it now.
-		static IDRemapDeleteListener listener{};
+		Initialize();
+		std::lock_guard<std::mutex> locker(s_remapLock);
 		changedIDs.clear();
 		deletedIDs.clear();
 	}
 
 	void HandleEndLoad()
 	{
+		std::lock_guard<std::mutex> locker(s_remapLock);
 		changedIDs.clear();
 		deletedIDs.clear();
 	}
 
 	bool ResolveFormId(u32 formId, u32* formIdOut)
 	{
+		std::lock_guard<std::mutex> locker(s_remapLock);
 		if (auto iter = changedIDs.find(formId); iter != changedIDs.end()) {
 			(*formIdOut) = iter->second;
 			return true;
@@ -176,6 +248,7 @@ namespace Serialization
 
 	bool ResolveHandle(u64 handle, u64* handleOut)
 	{
+		std::lock_guard<std::mutex> locker(s_remapLock);
 		u32 formId = static_cast<u32>(handle & 0x00000000FFFFFFFF);
 		if (auto iter = changedIDs.find(formId); iter != changedIDs.end()) {
 			(*handleOut) = (handle & 0xFFFFFFFF00000000) | static_cast<u64>(iter->second);
@@ -195,16 +268,14 @@ namespace Serialization
 
 	void HandleRevertGlobalData()
 	{
-		for (const auto& iter : s_pluginCallbacks)
+		std::vector<CallbackSnapshot> callbacks = GetCallbackSnapshot();
+		for (const auto& iter : callbacks)
 		{
-			if (iter.second.revert)
+			if (iter.callbacks.revert && !SafeCallEventCallback(iter.callbacks.revert))
 			{
-				iter.second.revert(&g_SFSESerializationInterface);
+				_ERROR("Revert callback for plugin %u failed", iter.handle);
 			}
 		}
-
-		changedIDs.clear();
-		deletedIDs.clear();
 	}
 
 	void HandleSaveGlobalData()
@@ -216,35 +287,46 @@ namespace Serialization
 			return;
 		}
 
-		FileStream::makeDirs(s_savePath.c_str());
+		std::string tempPath = s_savePath + ".tmp";
+		FileStream::makeDirs(tempPath.c_str());
 		FileStream f;
-		if (!f.create(s_savePath.c_str()))
+		if (!f.create(tempPath.c_str()))
 		{
-			_ERROR("HandleSaveGlobalData: couldn't create save file (%s)", s_savePath.c_str());
+			_ERROR("HandleSaveGlobalData: couldn't create save file (%s)", tempPath.c_str());
 			return;
 		}
 
+		bool ok = true;
 		GlobalDataHeader header = { GlobalDataHeader::kSignature, GlobalDataHeader::kVersion, PACKED_SFSE_VERSION, RUNTIME_VERSION, 0 };
-		f.write(&header, sizeof(header));
+		ok = WriteFileChecked(f, &header, sizeof(header));
 
 		u32 numPlugins = 0;
-		for (auto& iter : s_pluginCallbacks)
+		std::vector<CallbackSnapshot> callbacks = GetCallbackSnapshot();
+		for (auto& iter : callbacks)
 		{
-			PluginCallbacks& cb = iter.second;
-			if (!cb.save || !cb.hadUID)
+			PluginCallbacks& cb = iter.callbacks;
+			if (!ok)
 			{
+				break;
+			}
+
+			if (!cb.save)
+			{
+				continue;
+			}
+
+			if (!cb.hadUID)
+			{
+				_WARNING("HandleSaveGlobalData: plugin %u registered serialization callbacks without a unique ID", iter.handle);
 				continue;
 			}
 
 			std::vector<ChunkOut> chunks;
 			s_currentWriteChunks = &chunks;
-			try
+			if (!SafeCallEventCallback(cb.save))
 			{
-				cb.save(&g_SFSESerializationInterface);
-			}
-			catch (...)
-			{
-				_ERROR("HandleSaveGlobalData: exception occurred saving %08X at %016I64X data may be corrupt.", cb.uid, f.offset());
+				chunks.clear();
+				_ERROR("HandleSaveGlobalData: exception occurred while collecting data for %08X; skipping plugin data", cb.uid);
 			}
 			s_currentWriteChunks = nullptr;
 
@@ -256,28 +338,65 @@ namespace Serialization
 			u32 blockLen = 0;
 			for (const auto& c : chunks)
 			{
+				if (c.data.size() > (std::numeric_limits<u32>::max)() - sizeof(ChunkHeader) ||
+					blockLen > (std::numeric_limits<u32>::max)() - static_cast<u32>(sizeof(ChunkHeader) + c.data.size()))
+				{
+					_ERROR("HandleSaveGlobalData: plugin %08X wrote too much data", cb.uid);
+					ok = false;
+					break;
+				}
 				blockLen += static_cast<u32>(sizeof(ChunkHeader) + c.data.size());
 			}
 
+			if (!ok)
+			{
+				break;
+			}
+
 			PluginHeader ph = { cb.uid, static_cast<u32>(chunks.size()), blockLen };
-			f.write(&ph, sizeof(ph));
+			ok = WriteFileChecked(f, &ph, sizeof(ph));
 			for (const auto& c : chunks)
 			{
 				ChunkHeader ch = { c.type, c.version, static_cast<u32>(c.data.size()) };
-				f.write(&ch, sizeof(ch));
-				if (!c.data.empty())
+				ok = ok && WriteFileChecked(f, &ch, sizeof(ch));
+				if (ok && !c.data.empty())
 				{
-					f.write(c.data.data(), c.data.size());
+					ok = WriteFileChecked(f, c.data.data(), c.data.size());
+				}
+
+				if (!ok)
+				{
+					break;
 				}
 			}
-			numPlugins++;
+
+			if (ok)
+			{
+				numPlugins++;
+			}
 		}
 
-		// patch numPlugins
-		header.numPlugins = numPlugins;
-		f.seek(0);
-		f.write(&header, sizeof(header));
+		if (ok)
+		{
+			header.numPlugins = numPlugins;
+			ok = SeekFileChecked(f, 0) && WriteFileChecked(f, &header, sizeof(header));
+		}
+
 		f.close();
+
+		if (ok)
+		{
+			if (!MoveFileEx(tempPath.c_str(), s_savePath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+			{
+				_ERROR("HandleSaveGlobalData: couldn't replace save file (%s)", s_savePath.c_str());
+				DeleteFile(tempPath.c_str());
+			}
+		}
+		else
+		{
+			_ERROR("HandleSaveGlobalData: write failed; leaving existing co-save untouched (%s)", s_savePath.c_str());
+			DeleteFile(tempPath.c_str());
+		}
 	}
 
 	void HandleLoadGlobalData()
@@ -290,22 +409,25 @@ namespace Serialization
 			return;
 		}
 
-		std::vector<u8> bytes;
-		{
-			f.seek(0);
-			const u64 size = f.length();
-			bytes.resize(static_cast<size_t>(size));
-			if (size)
-				f.read(bytes.data(), size);
-			f.close();
-		}
-		if (bytes.size() < sizeof(GlobalDataHeader))
+		const u64 size = f.length();
+		if (size < sizeof(GlobalDataHeader))
 		{
 			return;
 		}
 
+		if (size > kMaxCosaveSize)
+		{
+			_ERROR("HandleLoadGame: co-save too large (%016I64X bytes)", size);
+			return;
+		}
+
 		GlobalDataHeader header;
-		memcpy(&header, bytes.data(), sizeof(header));
+		if (f.read(&header, sizeof(header)) != sizeof(header))
+		{
+			_ERROR("HandleLoadGame: couldn't read co-save header");
+			return;
+		}
+
 		if (header.magic != GlobalDataHeader::kSignature)
 		{
 			_ERROR("HandleLoadGame: invalid file signature (found %08X expected %08X)", header.magic, GlobalDataHeader::kSignature);
@@ -324,9 +446,21 @@ namespace Serialization
 			return;
 		}
 
-		for (auto& iter : s_pluginCallbacks)
-			iter.second.hadData = false;
+		_MESSAGE("HandleLoadGame: co-save sfseVersion=%08X runtimeVersion=%08X", header.sfseVersion, header.runtimeVersion);
 
+		std::vector<u8> bytes;
+		{
+			f.seek(0);
+			bytes.resize(static_cast<size_t>(size));
+			if (f.read(bytes.data(), size) != size)
+			{
+				_ERROR("HandleLoadGame: couldn't read co-save");
+				return;
+			}
+			f.close();
+		}
+
+		std::vector<CallbackSnapshot> callbacks = GetCallbackSnapshot();
 		size_t cur = sizeof(GlobalDataHeader);
 		for (u32 p = 0; p < header.numPlugins; p++)
 		{
@@ -347,20 +481,18 @@ namespace Serialization
 			const size_t blockEnd = cur + ph.length;
 
 			// find a registered plugin with this uid + a load callback
-			PluginCallbacks* target = nullptr;
-			for (auto& it : s_pluginCallbacks)
+			CallbackSnapshot* target = nullptr;
+			for (auto& it : callbacks)
 			{
-				if (it.second.hadUID && it.second.uid == ph.signature && it.second.load)
+				if (it.callbacks.hadUID && it.callbacks.uid == ph.signature && it.callbacks.load)
 				{
-					target = &it.second;
+					target = &it;
 					break;
 				}
 			}
 
 			if (target)
 			{
-				target->hadData = true;
-
 				std::vector<ChunkIn> chunks;
 				size_t c = blockStart;
 				bool ok = true;
@@ -380,11 +512,7 @@ namespace Serialization
 					s_currentReadChunks = &chunks;
 					s_currentReadIdx = static_cast<size_t>(-1);
 					s_currentReadByte = 0;
-					try
-					{
-						target->load(&g_SFSESerializationInterface);
-					}
-					catch (...)
+					if (!SafeCallEventCallback(target->callbacks.load))
 					{
 						_ERROR("HandleLoadGame: exception occurred loading %08X", ph.signature);
 					}
@@ -402,29 +530,14 @@ namespace Serialization
 
 			cur = blockEnd;
 		}
-
-		for (auto& iter : s_pluginCallbacks)
-		{
-			if (!iter.second.hadData && iter.second.load)
-			{
-				try
-				{
-					iter.second.load(&g_SFSESerializationInterface);
-				}
-				catch (...)
-				{
-					_ERROR("HandleLoadGame: exception occurred loading %08X", iter.second.uid);
-				}
-			}
-		}
 	}
 
 	void HandleDeleteSave(std::string saveName)
 	{
 		// The engine's delete worker passes the bare save name (".sfs" optional);
 		// derive both full paths the same way the save path is derived elsewhere.
-		std::string savePath = MakeSavePath(saveName, ".sfs", true);
-		std::string cosavePath = MakeSavePath(saveName, ".sfse", true);
+		std::string savePath = MakeSavePath(saveName, ".sfs", false);
+		std::string cosavePath = MakeSavePath(saveName, ".sfse", false);
 
 		// check if old file is gone
 		FileStream saveFile;
@@ -443,16 +556,22 @@ namespace Serialization
 
 	void SetUniqueID(PluginHandle plugin, u32 uid)
 	{
+		std::lock_guard<std::mutex> locker(s_callbackLock);
+		PluginCallbacks& cb = s_pluginCallbacks[plugin];
+		if (cb.hadUID)
+		{
+			_WARNING("plugin serialization UID already set (plugin = %d, existing uid = %08X, ignored uid = %08X)", plugin, cb.uid, uid);
+			return;
+		}
+
 		for (const auto& iter : s_pluginCallbacks)
 		{
 			if (iter.first != plugin && iter.second.hadUID && (iter.second.uid == uid))
 			{
 				_ERROR("plugin serialization UID collision (uid = %08X, plugins = %d %d)", uid, plugin, iter.first);
+				return;
 			}
 		}
-
-		PluginCallbacks& cb = s_pluginCallbacks[plugin];
-		ASSERT(!cb.hadUID);
 
 		cb.uid = uid;
 		cb.hadUID = true;
@@ -460,21 +579,26 @@ namespace Serialization
 
 	void SetRevertCallback(PluginHandle plugin, SFSESerializationInterface::EventCallback callback)
 	{
+		std::lock_guard<std::mutex> locker(s_callbackLock);
 		s_pluginCallbacks[plugin].revert = callback;
 	}
 
 	void SetSaveCallback(PluginHandle plugin, SFSESerializationInterface::EventCallback callback)
 	{
+		std::lock_guard<std::mutex> locker(s_callbackLock);
 		s_pluginCallbacks[plugin].save = callback;
 	}
 
 	void SetLoadCallback(PluginHandle plugin, SFSESerializationInterface::EventCallback callback)
 	{
+		std::lock_guard<std::mutex> locker(s_callbackLock);
 		s_pluginCallbacks[plugin].load = callback;
 	}
 
 	void SetFormDeleteCallback(PluginHandle plugin, SFSESerializationInterface::FormDeleteCallback callback)
 	{
+		Initialize();
+		std::lock_guard<std::mutex> locker(s_callbackLock);
 		s_pluginCallbacks[plugin].formDelete = callback;
 	}
 
@@ -490,10 +614,14 @@ namespace Serialization
 	{
 		if (!s_currentWriteChunks || s_currentWriteChunks->empty())
 			return false;
+		if (!buf && length)
+			return false;
 		if (buf && length)
 		{
 			const u8* b = static_cast<const u8*>(buf);
 			std::vector<u8>& d = s_currentWriteChunks->back().data;
+			if (d.size() > (std::numeric_limits<u32>::max)() - length)
+				return false;
 			d.insert(d.end(), b, b + length);
 		}
 		return true;

@@ -62,7 +62,7 @@ static const SFSETaskInterface g_SFSETaskInterface =
 // extern (external linkage): Serialization.cpp passes &g_SFSESerializationInterface to plugin callbacks
 extern const SFSESerializationInterface g_SFSESerializationInterface =
 {
-	SFSESerializationInterface::kVersion,
+	SFSESerializationInterface::kInterfaceVersion,
 
 	Serialization::SetUniqueID,
 	Serialization::SetRevertCallback,

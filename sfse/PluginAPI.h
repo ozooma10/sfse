@@ -173,17 +173,19 @@ struct SFSESerializationInterface
 {
 	enum
 	{
-		kVersion = 1
+		kInterfaceVersion = 1
 	};
 
 	typedef void (* EventCallback)(const SFSESerializationInterface * intfc);
-	typedef void (* FormDeleteCallback)(std::uint64_t handle);
+	typedef void (* FormDeleteCallback)(std::uint32_t formId);
 
-	std::uint32_t	version;
+	std::uint32_t	interfaceVersion;
 
 	void			(* SetUniqueID)(PluginHandle plugin, std::uint32_t uid);
 	void			(* SetRevertCallback)(PluginHandle plugin, EventCallback callback);
 	void			(* SetSaveCallback)(PluginHandle plugin, EventCallback callback);
+	// Load callbacks are dispatched only when this plugin has data in the co-save.
+	// Use the revert callback as the reset/no-data signal.
 	void			(* SetLoadCallback)(PluginHandle plugin, EventCallback callback);
 	void			(* SetFormDeleteCallback)(PluginHandle plugin, FormDeleteCallback callback);
 

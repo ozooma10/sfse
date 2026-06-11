@@ -34,10 +34,11 @@ scripts/compiler
 scripts/merged
 
 # cmake
-build/*
+build/
 
 out/*
 CMakeSettings.json
 
 # update temp files
 sfse_update
+.xmake

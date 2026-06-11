@@ -20,6 +20,7 @@ namespace Serialization
 	};
 
 	void SetSaveName(const char* name, bool hasExtension = false);
+	void Initialize();
 	void HandleBeginLoad();
 	void HandleEndLoad();
 	bool ResolveFormId(u32 formId, u32* formIdOut);
@@ -42,5 +43,3 @@ namespace Serialization
 	bool GetNextRecordInfo(u32* type, u32* version, u32* length);
 	u32  ReadRecordData(void* buf, u32 length);
 }
-
-#define MACRO_SWAP32(a)			((((a) & 0x000000FF) << 24) | (((a) & 0x0000FF00) << 8) | (((a) & 0x00FF0000) >> 8) | (((a) & 0xFF000000) >> 24))

@@ -29,3 +29,10 @@ endif()
 if (NOT TARGET sfse_loader)
 	add_subdirectory(sfse_loader)
 endif()
+
+option(SFSE_BUILD_CONTRACT_TESTS "Build lightweight SFSE public API contract tests" OFF)
+
+if(SFSE_BUILD_CONTRACT_TESTS)
+	enable_testing()
+	add_subdirectory(tests)
+endif()

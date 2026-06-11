@@ -36,11 +36,11 @@ RelocAddr <uintptr_t> VirtualMachine_IVMSaveLoadInterface_VTable(0x04DA7A38);
 void SaveGame_Hook(BGSSaveLoadGame* a_this, void* a_unk1, void* a_unk2, const char* a_name)
 {
 	Serialization::SetSaveName(a_name, true);
-	PluginManager::dispatchMessage(0, SFSEMessagingInterface::kMessage_PreSaveGame, (void*)a_name, (u32)strlen(a_name), NULL);
-	
+	PluginManager::dispatchMessage(0, SFSEMessagingInterface::kMessage_PreSaveGame, (void*)a_name, a_name ? (u32)strlen(a_name) : 0, NULL);
+
 	SaveGame_Original(a_this, a_unk1, a_unk2, a_name);
-	
-	PluginManager::dispatchMessage(0, SFSEMessagingInterface::kMessage_PostSaveGame, (void*)a_name, (u32)strlen(a_name), NULL);
+
+	PluginManager::dispatchMessage(0, SFSEMessagingInterface::kMessage_PostSaveGame, (void*)a_name, a_name ? (u32)strlen(a_name) : 0, NULL);
 	Serialization::SetSaveName(NULL);
 }
 
@@ -48,11 +48,14 @@ bool LoadGame_Hook(BGSSaveLoadGame* a_this, const char* a_name, void* a_unk1, vo
 {
 	Serialization::SetSaveName(a_name, false);
 	Serialization::HandleBeginLoad();
-	PluginManager::dispatchMessage(0, SFSEMessagingInterface::kMessage_PreLoadGame, (void*)a_name, (u32)strlen(a_name), NULL);
-	
+	PluginManager::dispatchMessage(0, SFSEMessagingInterface::kMessage_PreLoadGame, (void*)a_name, a_name ? (u32)strlen(a_name) : 0, NULL);
+
 	bool result = LoadGame_Original(a_this, a_name, a_unk1, a_unk2);
-	
-	PluginManager::dispatchMessage(0, SFSEMessagingInterface::kMessage_PostLoadGame, (void*)a_name, (u32)strlen(a_name), NULL);
+
+	if (result)
+	{
+		PluginManager::dispatchMessage(0, SFSEMessagingInterface::kMessage_PostLoadGame, (void*)a_name, a_name ? (u32)strlen(a_name) : 0, NULL);
+	}
 	Serialization::HandleEndLoad();
 	Serialization::SetSaveName(NULL);
 	return result;
@@ -61,7 +64,7 @@ bool LoadGame_Hook(BGSSaveLoadGame* a_this, const char* a_name, void* a_unk1, vo
 bool DeleteSaveFile_Hook(BGSSaveLoadManager* a_this, const char* a_saveName, u32 a_unk, bool a_flag)
 {
 	bool result = DeleteSaveFile_Original(a_this, a_saveName, a_unk, a_flag);
-	if (a_saveName) 
+	if (result && a_saveName)
 	{
 		Serialization::HandleDeleteSave(a_saveName);
 	}
@@ -99,19 +102,27 @@ void* VM_DropAllRunningData_Hook(void* a_this)
 bool VM_SaveGame_Hook(void* a_this, void* a_storage, void* a_handleReaderWriter, bool a_flag)
 {
 	bool result = VM_SaveGame_Original(a_this, a_storage, a_handleReaderWriter, a_flag);
-	Serialization::HandleSaveGlobalData();
+	if (result)
+	{
+		Serialization::HandleSaveGlobalData();
+	}
 	return result;
 }
 
 bool VM_LoadGame_Hook(void* a_this, void* a_storage, void* a_handleReaderWriter, bool* a_flag, bool* b_flag)
 {
 	bool result = VM_LoadGame_Original(a_this, a_storage, a_handleReaderWriter, a_flag, b_flag);
-	Serialization::HandleLoadGlobalData();
+	if (result)
+	{
+		Serialization::HandleLoadGlobalData();
+	}
 	return result;
 }
 
 void Hooks_Serialization_Apply()
 {
+	Serialization::Initialize();
+
 	// write call hooks for SaveGame & LoadGame
 	g_branchTrampoline.write5Call(SaveGame_Call.getUIntPtr(), (uintptr_t)SaveGame_Hook);
 	g_branchTrampoline.write5Call(LoadGame_Call.getUIntPtr(), (uintptr_t)LoadGame_Hook);
