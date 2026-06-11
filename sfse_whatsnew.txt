@@ -1,3 +1,6 @@
+0.2.21
+- support for 1.16.244
+
 0.2.20
 - support for 1.16.242
 
