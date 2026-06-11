@@ -32,6 +32,7 @@ enum
 	kInterface_Trampoline,
 	kInterface_Menu,
 	kInterface_Task,
+	kInterface_Serialization,
 	kInterface_Max,
 };
 
@@ -166,6 +167,34 @@ struct SFSETrampolineInterface
 
 	void * (* AllocateFromBranchPool)(PluginHandle plugin, size_t size);
 	void * (* AllocateFromLocalPool)(PluginHandle plugin, size_t size);
+};
+
+struct SFSESerializationInterface
+{
+	enum
+	{
+		kVersion = 1
+	};
+
+	typedef void (* EventCallback)(const SFSESerializationInterface * intfc);
+	typedef void (* FormDeleteCallback)(std::uint64_t handle);
+
+	std::uint32_t	version;
+
+	void			(* SetUniqueID)(PluginHandle plugin, std::uint32_t uid);
+	void			(* SetRevertCallback)(PluginHandle plugin, EventCallback callback);
+	void			(* SetSaveCallback)(PluginHandle plugin, EventCallback callback);
+	void			(* SetLoadCallback)(PluginHandle plugin, EventCallback callback);
+	void			(* SetFormDeleteCallback)(PluginHandle plugin, FormDeleteCallback callback);
+
+	bool			(* WriteRecord)(std::uint32_t type, std::uint32_t version, const void * buf, std::uint32_t length);
+	bool			(* OpenRecord)(std::uint32_t type, std::uint32_t version);
+	bool			(* WriteRecordData)(const void * buf, std::uint32_t length);
+
+	bool			(* GetNextRecordInfo)(std::uint32_t * type, std::uint32_t * version, std::uint32_t * length);
+	std::uint32_t	(* ReadRecordData)(void * buf, std::uint32_t length);
+	bool			(* ResolveHandle)(std::uint64_t handle, std::uint64_t * handleOut);
+	bool			(* ResolveFormID)(std::uint32_t formId, std::uint32_t * formIdOut);
 };
 
 typedef bool (* _SFSEPlugin_Load)(const SFSEInterface * sfse);
